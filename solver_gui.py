@@ -4,7 +4,10 @@ import threading
 from queue import Queue, Empty
 import tkinter as tk
 from tkinter import ttk, scrolledtext
+from tkinter import messagebox # Import messagebox for the About dialog
 
+# --- Solver Class (Remains Unchanged) ---
+# ... (your Solver class code here, copy-paste the whole thing) ...
 class Solver:
     def __init__(self, progress_queue=None):
         self.target = 0
@@ -46,11 +49,9 @@ class Solver:
         self.allowed_operators = allowed_operators 
         self.reset_search()
 
-        # Format operator list for status message
         active_ops_display = [op for op, allowed in allowed_operators.items() if allowed]
         self.send_progress('status', f"Starting search for {target_value} with operators: {', '.join(active_ops_display) if active_ops_display else 'None Selected'}...")
 
-        # --- Step 1: Initialize with single digits (count = 1) ---
         for i in range(1, 10):
             if not self._running: return None, None
             mask = 1 << (i - 1) 
@@ -67,7 +68,6 @@ class Solver:
 
         self.send_progress('status', f"Initial single digits processed. Starting iterative combinations.")
 
-        # --- Step 2: Iteratively combine expressions ---
         for current_k in range(2, self.MAX_DEPTH + 1):
             if not self._running: break
 
@@ -117,12 +117,29 @@ class Solver:
                         if self.allowed_operators.get('mul', False):
                             operations_to_try.append((val_A * val_B, f"({expr_A} * {expr_B})"))
 
-                        # --- Division (Conditional) ---
+                        # --- Division (Conditional - MODIFIED FOR REMAINDER) ---
                         if self.allowed_operators.get('div', False):
-                            if val_B != 0 and val_A % val_B == 0:
-                                operations_to_try.append((val_A // val_B, f"({expr_A} / {expr_B})"))
-                            if val_A != 0 and val_B % val_A == 0:
-                                operations_to_try.append((val_B // val_A, f"({expr_B} / {expr_A})"))
+                            # Case 1: val_A / val_B (Quotient and Remainder)
+                            if val_B != 0:
+                                # Quotient
+                                quotient = val_A // val_B
+                                operations_to_try.append((quotient, f"({expr_A} / {expr_B})")) 
+
+                                # Remainder (only if non-zero)
+                                remainder = val_A % val_B
+                                if remainder != 0: 
+                                    operations_to_try.append((remainder, f"({expr_A} % {expr_B})")) 
+
+                            # Case 2: val_B / val_A (Quotient and Remainder)
+                            if val_A != 0:
+                                # Quotient
+                                quotient = val_B // val_A
+                                operations_to_try.append((quotient, f"({expr_B} / {expr_A})"))
+
+                                # Remainder (only if non-zero)
+                                remainder = val_B % val_A
+                                if remainder != 0:
+                                    operations_to_try.append((remainder, f"({expr_B} % {expr_A})"))
 
                         # --- Exponentiation (Conditional) ---
                         if self.allowed_operators.get('exp', False):
@@ -179,9 +196,9 @@ class Solver:
 
         return self.best_expression, self.min_integer_count
 
-# --- Tkinter GUI App Class (Updated for operator selection via Combobox) ---
+
+# --- Tkinter GUI App Class (Updated with About Menu) ---
 class App:
-    # Renamed and simplified the operator levels
     OPERATOR_LEVELS = {
         "Addition Only": {'add': True, 'sub': False, 'mul': False, 'div': False, 'exp': False},
         "Addition & Subtraction": {'add': True, 'sub': True, 'mul': False, 'div': False, 'exp': False},
@@ -198,8 +215,30 @@ class App:
         self.solver = Solver(self.progress_queue)
         self.solver_thread = None
 
+        self.create_menu() # NEW: Create the menu bar
         self.create_widgets()
         self.check_queue()
+
+    # NEW method: Create the menu bar
+    def create_menu(self):
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about_dialog)
+
+    # NEW method: Show the About dialog
+    def show_about_dialog(self):
+        messagebox.showinfo(
+            "About Number Puzzle Solver",
+            "Application: Number Puzzle Solver\n"
+            "Version: v1.0\n"
+            "Description: A Python-based solver for number puzzles, designed to find arithmetic expressions using single-digit integers and selectable operations to reach a target number with minimum integers.\n\n"
+            "Created by: [Your Name/Alias Here]\n"
+            "Special Thanks: Developed with the assistance of Google Gemini.\n"
+            "© 2024" # Current year
+        )
 
     def create_widgets(self):
         # Input Frame
@@ -218,10 +257,10 @@ class App:
         self.stop_button.pack(side="left", padx=5, pady=5)
 
         # Operator Selection Frame (Simplified Combobox)
-        operator_select_frame = ttk.LabelFrame(self.root, text="Operator Set") # Changed label text
+        operator_select_frame = ttk.LabelFrame(self.root, text="Operator Set")
         operator_select_frame.pack(padx=10, pady=5, fill="x")
 
-        ttk.Label(operator_select_frame, text="Select Operators:").pack(side="left", padx=5, pady=5) # Changed label text
+        ttk.Label(operator_select_frame, text="Select Operators:").pack(side="left", padx=5, pady=5)
         
         self.op_level_var = tk.StringVar()
         self.op_level_combobox = ttk.Combobox(
@@ -231,7 +270,6 @@ class App:
             state="readonly"
         )
         self.op_level_combobox.pack(side="left", padx=5, pady=5)
-        # Set default selection to the most inclusive option
         self.op_level_combobox.set("All Operations (Including Exponent)") 
 
         # Status Frame
@@ -294,12 +332,12 @@ class App:
 
         selected_level_name = self.op_level_combobox.get()
         if not selected_level_name:
-            self.log_message("Please select an operator set.") # Changed message
+            self.log_message("Please select an operator set.")
             return
             
         allowed_operators = self.OPERATOR_LEVELS.get(selected_level_name)
         if allowed_operators is None:
-            self.log_message("Error: Invalid operator set selected. Please choose from the list.") # Changed message
+            self.log_message("Error: Invalid operator set selected. Please choose from the list.")
             return
 
         self.reset_gui_for_new_search()

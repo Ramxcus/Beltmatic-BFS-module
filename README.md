@@ -1,4 +1,4 @@
-Number Puzzle Solver
+Beltmatic Minimum Integer Search
 
 This is a Python-based graphical user interface (GUI) application that solves a number puzzle. The goal is to find an arithmetic expression using single-digit integers (1-9, which can be reused) and a selected set of mathematical operators to reach a specified target number, using the minimum possible number of integers.
 
